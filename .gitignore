@@ -1,0 +1,38 @@
+﻿# Large data folders - download separately
+Data/training/
+Data/MMs_training/
+Data/MMs_preprocessed/
+Data/CMRxM22_raw/
+Data/CMRxM22_preprocessed/
+
+# Intermediate checkpoints - only best kept
+Models/
+Models_mms_test/
+Models_cv_full/lvl1_*.pth
+Models_cv_full/lvl2_*.pth
+Models_cv_full/*step*.pth
+Models_mms_full/lvl1_*.pth
+Models_mms_full/lvl2_*.pth
+Models_mms_full/*step*.pth
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+
+# Results temp
+Results/test_gptf_original/
+
+# IDE
+.vscode/
+.idea/
+
+# Training folder
+training/
+
+# Intermediate pyramid checkpoints
+Models_cv_full/fold*_lvl1.pth
+Models_cv_full/fold*_lvl2.pth
+Models_mms_full/fold*_lvl1.pth
+Models_mms_full/fold*_lvl2.pth
