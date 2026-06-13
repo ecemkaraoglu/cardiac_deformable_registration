@@ -1,17 +1,17 @@
 """
 eval_mms_test.py
 ================
-Bağımsız M&Ms20 test evaluation scripti.
-Training kodu yok — sadece kaydedilmiş checkpoint'leri yükler,
-her fold'un test setini evaluate eder, sonuçları yazdırır ve kaydeder.
+Independent M&Ms20 test evaluation script.
+No training code — only loads saved checkpoints,
+evaluates each fold's test set, prints and saves the results.
 
-Kullanım:
+Usage:
     cd DIR-MRVIT
     python Code/eval_mms_test.py
 
-Gereksinimler:
-    - Models_mms_full/fold{0..4}_lvl3_best.pth   (mevcut)
-    - Data/MMs_preprocessed/                      (offline preprocessed)
+Requirements:
+    - Models_mms_full/fold{0..4}_lvl3_best.pth   (provided)
+    - Data/MMs_preprocessed/                      (run preprocess_mms.py first)
 
 M&Ms label convention:
     1 = LV cavity   (Endo)

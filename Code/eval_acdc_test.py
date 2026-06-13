@@ -1,16 +1,16 @@
 """
 eval_acdc_test.py
 =================
-Bağımsız ACDC test evaluation scripti.
-Training kodu yok — sadece kaydedilmiş checkpoint'leri yükler,
-her fold'un test setini evaluate eder, sonuçları yazdırır ve kaydeder.
+Independent ACDC test evaluation script.
+No training code — only loads saved checkpoints,
+evaluates each fold's test set, prints and saves the results.
 
-Kullanım:
+Usage:
     cd DIR-MRVIT
     python Code/eval_acdc_test.py
 
-Gereksinimler:
-    - Models_cv_full/fold{0..4}_lvl3_best.pth   (mevcut)
+Requirements:
+    - Models_cv_full/fold{0..4}_lvl3_best.pth   (provided)
     - Data/training/patient*/                    (ACDC dataset)
 """
 
