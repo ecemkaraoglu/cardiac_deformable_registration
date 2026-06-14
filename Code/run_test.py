@@ -9,7 +9,7 @@ For each patient:
   2. Runs forward pass through the model
   3. Warps the ES segmentation using the predicted deformation field
   4. Computes evaluation metrics (DSC, ASSD, HD95, Jacobian)
-  5. Saves warped images and deformation fields to Results/test_output/
+  5. Prints per-patient and pooled results to the terminal
 
 Usage:
     python Code/run_test.py
@@ -50,7 +50,6 @@ BASE_DIR       = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SAMPLE_DIR     = os.path.join(BASE_DIR, 'Data', 'sample_data')
 ACDC_MODEL     = os.path.join(BASE_DIR, 'Models_cv_full', 'fold0_lvl3_best.pth')
 MMS_MODEL      = os.path.join(BASE_DIR, 'Models_mms_full', 'fold0_lvl3_best.pth')
-OUTPUT_DIR     = os.path.join(BASE_DIR, 'Results', 'test_output')
 # ================================================
 
 
@@ -238,13 +237,6 @@ def warp_segmentation(seg, disp_field, grid, device):
     return result
 
 
-def save_nifti(arr, path, spacing=(1.25, 1.25, 5.0)):
-    img = sitk.GetImageFromArray(arr)
-    img.SetSpacing(spacing)
-    os.makedirs(os.path.dirname(path), exist_ok=True)
-    sitk.WriteImage(img, path)
-
-
 # -------------------- Dataset Loaders --------------------
 def load_acdc_samples():
     acdc_dir = os.path.join(SAMPLE_DIR, 'acdc')
@@ -310,9 +302,6 @@ def evaluate_dataset(name, samples, model, device, lv_label, myo_label,
     grid = torch.from_numpy(
         np.reshape(grid, (1,) + grid.shape)).to(device).float()
 
-    out_dir = os.path.join(OUTPUT_DIR, name)
-    os.makedirs(out_dir, exist_ok=True)
-
     keys = ['lv_dice', 'myo_dice', 'endo_assd', 'epi_assd',
             'endo_hd', 'epi_hd', 'jac']
     results = {k: [] for k in keys}
@@ -362,28 +351,6 @@ def evaluate_dataset(name, samples, model, device, lv_label, myo_label,
         results['epi_hd'].append(ph)
         results['jac'].append(jac)
 
-        # Save warped image and deformation field
-        transform = SpatialTransform_unit().to(device)
-        with torch.no_grad():
-            warped_img = transform(
-                mov, disp.permute(0, 2, 3, 4, 1), grid)
-        warped_np = warped_img.squeeze().cpu().numpy().transpose(2, 0, 1)
-
-        save_nifti(warped_np, os.path.join(out_dir, f'{patient_id}_warped.nii.gz'),
-                   spacing_mm)
-        save_nifti(warped_seg.astype(np.float32),
-                   os.path.join(out_dir, f'{patient_id}_warped_seg.nii.gz'),
-                   spacing_mm)
-
-        flow = transform_unit_flow_to_flow_cuda(
-            disp.permute(0, 2, 3, 4, 1).clone())
-        flow_np = flow.squeeze(0).cpu().numpy().transpose(3, 0, 1, 2)
-        flow_sitk = sitk.GetImageFromArray(flow_np.transpose(1, 2, 3, 0),
-                                           isVector=True)
-        flow_sitk.SetSpacing(spacing_mm)
-        sitk.WriteImage(flow_sitk,
-                        os.path.join(out_dir, f'{patient_id}_flow.nii.gz'))
-
         print(f'  [{i+1:2d}/{len(samples)}] {patient_id:12s}  '
               f'LV={lv_d:.3f}  MYO={myo_d:.3f}  '
               f'EndoASSD={ea:.2f}mm  EpiASSD={pa:.2f}mm  '
@@ -414,7 +381,6 @@ def evaluate_dataset(name, samples, model, device, lv_label, myo_label,
         print(f'  {metric_names[k]:<20s} {ours:>20s} {paper:>20s}')
 
     print(f'  {"Inference time":<20s} {np.mean(times):.3f}s / pair')
-    print(f'\n  Outputs saved to: {out_dir}')
 
     return results
 
@@ -440,7 +406,6 @@ def main():
     print('=' * 70)
     print(f'  Device       : {device}')
     print(f'  Sample data  : {SAMPLE_DIR}')
-    print(f'  Output       : {OUTPUT_DIR}')
     print(f'  ACDC model   : {ACDC_MODEL}')
     print(f'  M&Ms model   : {MMS_MODEL}')
 

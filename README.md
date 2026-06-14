@@ -1,130 +1,53 @@
 # Cardiac Deformable Image Registration
-### Multi-Dataset Evaluation of a CNN-Transformer Hybrid Framework
 
-This repository contains the reproduction and multi-dataset evaluation of the **DIR-MRVIT** method for deformable cardiac image registration, applied to three public cardiac MRI datasets (ACDC17, M&Ms20, CMRxM22).
+Deformable image registration estimates a dense spatial mapping between two images of the same anatomy. In cardiac MRI, this mapping describes how the heart muscle moves between end-diastole (ED) and end-systole (ES), and supports automatic motion analysis that would otherwise require manual delineation.
 
-The original model was proposed in:
+DIR-MRVIT addresses this task with three ideas: a **Laplacian pyramid** that predicts the displacement field at three increasing resolutions and composes them, **Convolutional Projection Transformer Blocks (CPTBs)** that capture long-range spatial dependencies inside the registration network, and a **diffeomorphic formulation** that constrains the displacement field to produce smooth, invertible deformations with few folding artifacts.
 
-> Lu, X., Zhao, H., Chen, H., Yang, D., Zhang, S., & Xie, Q. (2026). *Deformable image registration using multi-resolution vision Transformer for cardiac motion estimation*. Physics in Medicine & Biology, 71, 025004. https://doi.org/10.1088/1361-6560/ae365a
+The original paper evaluates DIR-MRVIT on ACDC17, M&Ms20, and CMRxM22, but the released code base only covers M&Ms20. This project adds the missing pieces: a stratified 5-fold cross-validation pipeline for ACDC17, a preprocessing and zero-shot evaluation pipeline for CMRxM22, and a unified demo that runs the trained models on sample patients from all three datasets. The original model code (`GP_TF.py`, `TransBlock.py`, `Functions.py`) is used as published; everything else in `Code/` was written here.
 
-The original model code is available at: https://github.com/xslu-scuec/DIR-MRVIT
-
----
-
-## Introduction
-
-Cardiac MR imaging is the main modality for assessing cardiac function. Estimating the motion of the heart between end-diastole (ED) and end-systole (ES) is clinically valuable, but doing it by hand is slow and varies between observers. **Deformable image registration** finds a spatial mapping between two images so that automatic motion measurement becomes possible.
-
-This project reproduces the DIR-MRVIT method — a hybrid CNN-Transformer network with a three-level Laplacian pyramid — and applies it to three different cardiac MRI datasets. The original repository only targets M&Ms20; this work extends the pipeline to ACDC17 and CMRxM22 as well, and compares the results directly to the values reported in the paper's Tables 2–4.
-
-The original model code (`GP_TF.py`, `TransBlock.py`, `Functions.py`) is used as published. The preprocessing pipelines, cross-validation drivers, and evaluation scripts were written from scratch and adapted to each dataset.
+Reference paper: Lu et al., *Deformable image registration using multi-resolution vision Transformer for cardiac motion estimation*, Phys. Med. Biol. 71, 025004 (2026). [DOI](https://doi.org/10.1088/1361-6560/ae365a). Original repository: https://github.com/xslu-scuec/DIR-MRVIT.
 
 ---
 
-## Key Findings
-
-Across all three datasets, the reproduced metrics are close to the paper. On the myocardium Dice, this work **passes the paper on M&Ms20 and CMRxM22**:
-
-| Dataset  | Metric          | This work             | Paper             |
-|----------|-----------------|-----------------------|-------------------|
-| ACDC17   | LV Dice         | 0.887 ± 0.069         | 0.917 ± 0.043     |
-| ACDC17   | MYO Dice        | 0.752 ± 0.065         | 0.789 ± 0.055     |
-| M&Ms20   | LV Dice         | 0.877 ± 0.050         | 0.884 ± 0.038     |
-| M&Ms20   | **MYO Dice**    | **0.790 ± 0.070** ✅   | 0.729 ± 0.057     |
-| CMRxM22  | LV Dice         | 0.857 ± 0.051         | 0.892 ± 0.027     |
-| CMRxM22  | **MYO Dice**    | **0.758 ± 0.077** ✅   | 0.703 ± 0.050     |
-
-(✅ = beats paper. Full table including ASSD, HD95, and Jacobian metrics is in the project report.)
-
-The remaining gaps come from the unspecified training schedule in the paper, random training variation, and minor preprocessing choices (e.g. independent vs. anchored cropping). See the full report for the detailed discussion.
-
----
-
-## Quick Demo
-
-The repository includes a unified demo script that runs on a small set of sample patients shipped with the repository. **No dataset download required.**
-
-```bash
-git clone https://github.com/ecemkaraoglu/cardiac_deformable_registration.git
-cd cardiac_deformable_registration
-pip install -r requirements.txt
-python Code/run_test.py
-```
-
-Runs all three datasets on the included sample patients (10 ACDC + 10 M&Ms + 18 CMRxM22) using the pre-trained checkpoints. Takes about 1–2 minutes on a CUDA GPU.
-
-Useful options:
-
-```bash
-python Code/run_test.py --dataset acdc      # run only ACDC
-python Code/run_test.py --dataset mms       # run only M&Ms
-python Code/run_test.py --dataset cmrxm22   # run only CMRxM22
-python Code/run_test.py --cpu               # force CPU (no GPU needed)
-```
-
-The script prints per-patient metrics, a summary table with paper comparison, and saves warped images and deformation fields to `Results/test_output/`.
-
-### Random qualitative figure
-
-For a visual demo on top of the numbers, run:
-
-```bash
-python Code/demo_figure.py            # GPU if available, else CPU
-python Code/demo_figure.py --cpu      # force CPU
-```
-
-This picks **one random patient from each dataset** (ACDC, M&Ms, CMRxM22) and produces a 3×4 figure showing the moving image (ES), fixed image (ED), the warped image predicted by the model, and the difference map — with overlaid LV-endocardium (orange) and LV-epicardium (green) contours. The figure pops up in a matplotlib window. Re-running the script picks a different random patient each time.
-
-**Note:** Sample results are computed on a small subset and may differ slightly from the full-dataset numbers reported above. The full results in the table use 100/150/69 patients respectively with five-fold cross-validation.
-
----
-
-## Repository Structure
+## Repository structure
 
 ```
 cardiac_deformable_registration/
 │
 ├── Code/
-│   ├── GP_TF.py                    # Main model: 3-level Laplacian pyramid + CPTB (original, unchanged)
-│   ├── TransBlock.py               # Convolutional Projection Transformer Block (original, unchanged)
-│   ├── Functions.py                # Grid generation, dataset utilities (original, unchanged)
-│   ├── Train_GPTF_disp.py          # Original training script (reference, unchanged)
-│   ├── Test_GPTF_disp.py           # Original test script (reference, unchanged)
+│   ├── GP_TF.py                    # 3-level Laplacian pyramid model (original, unchanged)
+│   ├── TransBlock.py               # Convolutional Projection Transformer Block (original)
+│   ├── Functions.py                # Grid generation, dataset utilities (original)
+│   ├── Train_GPTF_disp.py          # Original training script (reference)
+│   ├── Test_GPTF_disp.py           # Original test script (reference)
 │   │
 │   ├── cross_validation_acdc.py    # ACDC17 5-fold stratified cross-validation
 │   ├── cross_validation_mms.py     # M&Ms20 5-fold cross-validation
 │   │
-│   ├── preprocess_mms.py           # M&Ms20 preprocessing (resample, anchored crop, normalize)
-│   ├── preprocess_cmrxm22.py       # CMRxM22 preprocessing (IQA filter, resample, label remap)
+│   ├── preprocess_mms.py           # M&Ms20 preprocessing
+│   ├── preprocess_cmrxm22.py       # CMRxM22 preprocessing (IQA filter, label remap)
 │   │
-│   ├── evaluate_cmrxm22.py         # CMRxM22 zero-shot evaluation (M&Ms-trained model)
-│   ├── eval_acdc_test.py           # Independent ACDC17 verification on saved checkpoints
-│   ├── eval_mms_test.py            # Independent M&Ms20 verification on saved checkpoints
+│   ├── evaluate_cmrxm22.py         # CMRxM22 zero-shot evaluation
+│   ├── eval_acdc_test.py           # Independent ACDC17 verification
+│   ├── eval_mms_test.py            # Independent M&Ms20 verification
 │   │
-│   ├── run_test.py                 # Unified demo script (all three datasets, sample data)
+│   ├── run_test.py                 # Unified demo (all three datasets, sample data)
 │   ├── demo_figure.py              # Random qualitative figure (one patient per dataset)
-│   └── figure_a.py                 # Qualitative figure generator (used for the project report)
+│   └── figure_a.py                 # Qualitative figure generator (used in the report)
 │
 ├── Data/
-│   ├── sample_data/                # 10 ACDC + 10 M&Ms + 18 CMRxM22 sample patients for the demo
-│   │   ├── acdc/
-│   │   ├── mms/
-│   │   └── cmrxm22/
+│   ├── sample_data/                # Sample patients shipped with the repo for the demo
+│   │   ├── acdc/                   # 10 ACDC patients (raw NIfTI)
+│   │   ├── mms/                    # 10 M&Ms patients (preprocessed)
+│   │   └── cmrxm22/                # 18 CMRxM22 scans (preprocessed)
 │   └── 211230_M&Ms_Dataset_information_diagnosis_opendataset.csv
 │
-├── Models_cv_full/                 # ACDC17 trained models (5-fold)
-│   ├── fold{0-4}_lvl3_best.pth     # Best checkpoint per fold
-│   ├── cv_pooled_results.npy       # Pooled test results across all folds
-│   └── eval_acdc_independent.npy   # Independent verification results
-│
-├── Models_mms_full/                # M&Ms20 trained models (5-fold)
-│   ├── fold{0-4}_lvl3_best.pth     # Best checkpoint per fold
-│   ├── cv_pooled_results_mms.npy   # Pooled test results across all folds
-│   └── eval_mms_independent.npy    # Independent verification results
+├── Models_cv_full/                 # ACDC17 trained checkpoints (5 folds)
+├── Models_mms_full/                # M&Ms20 trained checkpoints (5 folds)
 │
 ├── Results/
-│   └── cmrxm22/
-│       └── cmrxm22_results.csv     # Per-case CMRxM22 evaluation results
+│   └── cmrxm22/                    # Per-case CMRxM22 evaluation results
 │
 ├── README.md
 ├── requirements.txt
@@ -133,72 +56,92 @@ cardiac_deformable_registration/
 
 ---
 
-## Requirements
-
-### Hardware
+## Hardware requirements
 
 - GPU with CUDA support recommended (tested on NVIDIA RTX 5070 Ti, CUDA 12.8)
 - Minimum 8 GB VRAM for training
-- The demo script runs on CPU as well (use `--cpu`)
-
-### Software
-
+- The demo scripts also run on CPU (use the `--cpu` flag)
 - Python 3.12
-- CUDA 12.8 (for GPU mode)
 
-### Installation
+For CUDA versions other than 12.8, see https://pytorch.org/get-started/locally/ for the matching `torch` install command, then continue with `pip install -r requirements.txt`.
 
-Copy and paste the commands below into your terminal:
+---
 
-**GPU (CUDA 12.8) — recommended:**
+## Getting started
+
+The repository ships with a small set of sample patients so that the trained models can be tried out **without downloading any of the full datasets**.
+
+The five commands below clone the repository, install PyTorch and the remaining dependencies, and run the unified demo on all three datasets. They can be copied and pasted into a terminal as a single block.
+
+**GPU (CUDA 12.8)**
 
 ```bash
+git clone https://github.com/ecemkaraoglu/cardiac_deformable_registration.git
+cd cardiac_deformable_registration
 pip install torch==2.11.0+cu128 torchvision==0.26.0+cu128 --index-url https://download.pytorch.org/whl/cu128
 pip install -r requirements.txt
+python Code/run_test.py
 ```
 
-**CPU only — slower, but no CUDA required:**
+**CPU only**
 
 ```bash
+git clone https://github.com/ecemkaraoglu/cardiac_deformable_registration.git
+cd cardiac_deformable_registration
 pip install torch==2.11.0 torchvision==0.26.0
 pip install -r requirements.txt
+python Code/run_test.py --cpu
 ```
 
-For other CUDA versions, see https://pytorch.org/get-started/locally/ for the right `torch` install command, then run `pip install -r requirements.txt`.
+The `run_test.py` script runs the trained models on the sample patients (10 ACDC + 10 M&Ms + 18 CMRxM22) and prints per-patient and pooled metrics for each dataset, with the corresponding paper values printed alongside for comparison.
+
+### Running a single dataset
+
+```bash
+python Code/run_test.py --dataset acdc      # ACDC only
+python Code/run_test.py --dataset mms       # M&Ms only
+python Code/run_test.py --dataset cmrxm22   # CMRxM22 only
+```
+
+### Qualitative demo
+
+```bash
+python Code/demo_figure.py
+```
+
+Picks one random patient from each dataset and opens a matplotlib window showing four panels per patient: the moving frame (ES), the fixed frame (ED), the warped frame predicted by the model, and a difference map. Overlaid contours show the LV endocardium (orange) and LV epicardium (green). Re-running picks different random patients.
+
+Both demo scripts use a single trained fold (fold 0) for each dataset. The pooled results in the *Results* section below are averaged across all five folds.
 
 ---
 
 ## Datasets
 
-The demo uses the included sample data and needs no download. The full datasets are only needed to reproduce the training or full-dataset evaluation.
+Only required to reproduce the full training and evaluation. The demo runs from the included sample data and needs no external download.
 
 ### ACDC17
 
 - Download: https://www.creatis.insa-lyon.fr/Challenge/acdc/databases.html
-- Place training data in `Data/training/patient001/`, `Data/training/patient002/`, ...
-- Expected files per patient: `patient001_frame01.nii.gz`, `patient001_frame01_gt.nii.gz`, etc.
+- Place patient folders in `Data/training/`, e.g. `Data/training/patient001/`.
 
 ### M&Ms20
 
 - Download: https://www.ub.edu/mnms/
-- Required files per patient: `<code>_sa.nii.gz`, `<code>_sa_gt.nii.gz`
-- Place raw data in `Data/MMs_training/`
-- CSV file: `Data/211230_M&Ms_Dataset_information_diagnosis_opendataset.csv` (already included)
-- Run `preprocess_mms.py` before training (see below)
+- Place raw cases in `Data/MMs_training/`.
+- The diagnosis CSV is already included at `Data/211230_M&Ms_Dataset_information_diagnosis_opendataset.csv`.
 
 ### CMRxM22
 
 - Download: https://zenodo.org/records/6362258
-- Place extracted folder (containing `data/` and `IQA.csv`) at `Data/CMRxM22_raw/`
-- Run `preprocess_cmrxm22.py` before evaluation (see below)
+- Place the extracted folder at `Data/CMRxM22_raw/`.
 
 ---
 
 ## Preprocessing
 
-ACDC17 preprocessing (resampling, cropping, normalization) is integrated into `cross_validation_acdc.py` because the dataset is small enough to preprocess at the start of each run. M&Ms20 and CMRxM22 use heavier preprocessing (4D timeseries extraction, IQA filtering, label remapping) so they have separate scripts that run once before training/evaluation.
+ACDC17 preprocessing (resample to 1.25 x 1.25 x 5.0 mm, crop to 96 x 96 x 16, intensity normalization) is performed inline by each ACDC script (`cross_validation_acdc.py`, `eval_acdc_test.py`, `run_test.py`, and `demo_figure.py`). No separate `preprocess_acdc.py` step is needed.
 
-> **Design note.** ACDC preprocessing is performed inline by each ACDC script (training, evaluation, and demo) rather than as a separate one-shot step that writes to disk. This is for historical reasons — ACDC was the first dataset added and its preprocessing is light, so a dedicated `preprocess_acdc.py` script was never separated out. M&Ms20 and CMRxM22 do use disk-based preprocessing because of their heavier transformations (4D extraction, IQA filtering, label remapping). All three datasets apply the same operations during preprocessing (resample → crop → normalize); only the location of the code differs. Sample ACDC patients in `Data/sample_data/acdc/` are therefore stored as raw NIfTI files, while M&Ms20 and CMRxM22 samples are stored as preprocessed NIfTI files.
+M&Ms20 and CMRxM22 use disk-based preprocessing because of their heavier transformations (4D timeseries extraction, IQA filtering, label remapping). All three datasets apply the same operations conceptually (resample, crop, normalize); only the location of the code differs.
 
 ### M&Ms20
 
@@ -206,7 +149,7 @@ ACDC17 preprocessing (resampling, cropping, normalization) is integrated into `c
 python Code/preprocess_mms.py
 ```
 
-Resamples to 1.25 × 1.25 × 8 mm, crops to 96 × 96 × 16 centred on the LV using anchored cropping (ED-based crop box applied to both ED and ES), and saves to `Data/MMs_preprocessed/`.
+Extracts ED and ES frames from the 4D series, resamples to 1.25 x 1.25 x 8 mm, applies anchored cropping (ED-based crop box reused for ES), and writes preprocessed NIfTI files to `Data/MMs_preprocessed/`.
 
 ### CMRxM22
 
@@ -214,55 +157,78 @@ Resamples to 1.25 × 1.25 × 8 mm, crops to 96 × 96 × 16 centred on the LV usi
 python Code/preprocess_cmrxm22.py --raw_dir Data/CMRxM22_raw --out_dir Data/CMRxM22_preprocessed
 ```
 
-Filters out non-diagnostic cases via IQA scores, resamples, crops, remaps labels to the M&Ms convention, and writes a `pairs.txt` for evaluation.
+Filters out non-diagnostic cases via the IQA score, resamples, crops, remaps labels into the M&Ms20 convention, and writes a `pairs.txt` file used by the evaluation script.
 
 ---
 
 ## Training
 
-> **Pre-trained checkpoints for all folds are already included** in `Models_cv_full/` and `Models_mms_full/`. Training is only needed to reproduce the process from scratch.
+Pre-trained checkpoints for all folds are already included in `Models_cv_full/` (ACDC17) and `Models_mms_full/` (M&Ms20). The commands below only need to be re-run to reproduce training from scratch.
 
-### ACDC17 — 5-fold Cross-Validation
+### ACDC17
 
 ```bash
 python Code/cross_validation_acdc.py
 ```
 
-Stratified 5-fold split (4 patients from each pathology group per fold's test set). Checkpoints saved to `Models_cv_full/fold{i}_lvl3_best.pth`. Takes overnight on a single GPU.
+Stratified 5-fold split, 4 patients per pathology group in each test fold. Checkpoints are saved as `Models_cv_full/fold{i}_lvl3_best.pth`.
 
-### M&Ms20 — 5-fold Cross-Validation
+### M&Ms20
 
 ```bash
 python Code/cross_validation_mms.py
 ```
 
-5-fold random split (105 train / 15 val / 30 test). Checkpoints saved to `Models_mms_full/fold{i}_lvl3_best.pth`.
+5-fold split with 105 train / 15 validation / 30 test patients per fold. Checkpoints are saved as `Models_mms_full/fold{i}_lvl3_best.pth`.
 
 ---
 
-## Evaluation (full datasets)
+## Evaluation on the full datasets
 
-These scripts run on the full datasets (not the sample data) and reproduce the values from the report.
-
-### ACDC17
+These scripts reproduce the numbers in the *Results* section below.
 
 ```bash
-python Code/eval_acdc_test.py
-```
-
-### M&Ms20
-
-```bash
-python Code/eval_mms_test.py
-```
-
-### CMRxM22
-
-```bash
+python Code/eval_acdc_test.py        # ACDC17, 5-fold pooled
+python Code/eval_mms_test.py         # M&Ms20, 5-fold pooled
 python Code/evaluate_cmrxm22.py --data_dir Data/CMRxM22_preprocessed --model_dir Models_mms_full --all_folds --out_dir Results/cmrxm22
 ```
 
-The `--all_folds` flag averages the metrics across all five M&Ms-trained fold models for a more stable estimate than a single randomly chosen fold (which is what the paper reports).
+The `--all_folds` flag averages metrics across all five M&Ms-trained fold models for a more stable estimate than a single randomly chosen fold (which is what the paper reports).
+
+---
+
+## Results
+
+Three evaluation regimes are reported below. The **sample** column shows the metrics produced by `run_test.py` on the small sample subsets shipped with this repository (10 ACDC, 10 M&Ms, 18 CMRxM22), using fold 0 of the trained checkpoints. The **full** column shows the full-dataset results reproduced in this project: 5-fold stratified cross-validation on the 100 ACDC17 patients, 5-fold cross-validation on the 150 M&Ms20 patients (with smoothness weight λ=0.2), and zero-shot transfer to all 69 CMRxM22 cases averaged across the five M&Ms-trained fold models. The **paper** column shows the values reported in Tables 2–4 of the original DIR-MRVIT paper.
+
+### ACDC17
+
+| Metric          | Sample (10)         | Full (100, 5-fold)   | Paper (100, 5-fold) |
+|-----------------|---------------------|----------------------|---------------------|
+| LV Dice         | 0.870 ± 0.080       | 0.887 ± 0.069        | 0.917 ± 0.043       |
+| MYO Dice        | 0.754 ± 0.063       | 0.752 ± 0.065        | 0.789 ± 0.055       |
+| Endo HD95 (mm)  | 5.59  ± 2.44        | 5.27  ± 2.43         | 5.62  ± 1.22        |
+| Epi HD95 (mm)   | 6.63  ± 2.32        | 4.40  ± 2.01         | 5.51  ± 1.77        |
+
+### M&Ms20
+
+| Metric          | Sample (10)         | Full (150, 5-fold)   | Paper (150, 5-fold) |
+|-----------------|---------------------|----------------------|---------------------|
+| LV Dice         | 0.893 ± 0.030       | 0.877 ± 0.050        | 0.884 ± 0.038       |
+| MYO Dice        | 0.794 ± 0.047       | 0.790 ± 0.070        | 0.729 ± 0.057       |
+| Endo HD95 (mm)  | 6.58  ± 1.84        | 7.15                 | 7.40  ± 2.78        |
+| Epi HD95 (mm)   | 8.20  ± 0.82        | 8.74                 | 8.16  ± 1.95        |
+
+### CMRxM22 (zero-shot)
+
+| Metric          | Sample (18)         | Full (69, all folds) | Paper (69)          |
+|-----------------|---------------------|----------------------|---------------------|
+| LV Dice         | 0.857 ± 0.040       | 0.857 ± 0.051        | 0.892 ± 0.027       |
+| MYO Dice        | 0.675 ± 0.051       | 0.758 ± 0.077        | 0.703 ± 0.050       |
+| Endo HD95 (mm)  | 7.74  ± 2.10        | 7.51                 | 7.82  ± 2.31        |
+| Epi HD95 (mm)   | 7.85  ± 0.90        | 8.22                 | 8.07  ± 2.24        |
+
+Additional metrics (ASSD, Jacobian folding percentage), per-fold breakdowns, and the ablation comparing smoothness weights (λ=0.5 vs λ=0.2 on M&Ms20) are reported in the project report.
 
 ---
 
@@ -286,4 +252,4 @@ If you use this code, please cite the original paper:
 
 ## Acknowledgements
 
-This project was completed for the EE634 Digital Image Processing course at Middle East Technical University. The original DIR-MRVIT model code is the work of Lu et al.; this repository only contains the reproduction effort and the multi-dataset extensions.
+This project was carried out for the EE634 Digital Image Processing course at Middle East Technical University. The DIR-MRVIT model code is the work of Lu et al.; this repository contains the multi-dataset extensions and evaluation pipeline built around it.
