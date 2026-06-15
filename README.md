@@ -2,9 +2,9 @@
 
 Deformable image registration estimates a dense spatial mapping between two images of the same anatomy. In cardiac MRI, this mapping describes how the heart muscle moves between end-diastole (ED) and end-systole (ES), and supports automatic motion analysis that would otherwise require manual delineation.
 
-DIR-MRVIT addresses this task with three ideas: a **Laplacian pyramid** that predicts the displacement field at three increasing resolutions and composes them, **Convolutional Projection Transformer Blocks (CPTBs)** that capture long-range spatial dependencies inside the registration network, and a **diffeomorphic formulation** that constrains the displacement field to produce smooth, invertible deformations with few folding artifacts.
+DIR-MRVIT uses a **Laplacian pyramid** with **Convolutional Projection Transformer Blocks (CPTBs)** trained in a **coarse-to-fine** manner to register cardiac MR images between end-diastole and end-systole.
 
-The original paper evaluates DIR-MRVIT on ACDC17, M&Ms20, and CMRxM22, but the released code base only covers M&Ms20. This project adds the missing pieces: a stratified 5-fold cross-validation pipeline for ACDC17, a preprocessing and zero-shot evaluation pipeline for CMRxM22, and a unified demo that runs the trained models on sample patients from all three datasets. The original model code (`GP_TF.py`, `TransBlock.py`, `Functions.py`) is used as published; everything else in `Code/` was written here.
+The original paper evaluates DIR-MRVIT on ACDC17, M&Ms20, and CMRxM22, but the released code base only covers M&Ms20. This project adds the missing pieces: a stratified 5-fold cross-validation pipeline for ACDC17, a preprocessing and evaluation pipeline for CMRxM22, and a unified demo that runs the trained models on sample patients from all three datasets. The original model code (`GP_TF.py`, `TransBlock.py`, `Functions.py`) is used as published; everything else in `Code/` was written here.
 
 Reference paper: Lu et al., *Deformable image registration using multi-resolution vision Transformer for cardiac motion estimation*, Phys. Med. Biol. 71, 025004 (2026). [DOI](https://doi.org/10.1088/1361-6560/ae365a). Original repository: https://github.com/xslu-scuec/DIR-MRVIT.
 
@@ -28,13 +28,12 @@ cardiac_deformable_registration/
 │   ├── preprocess_mms.py           # M&Ms20 preprocessing
 │   ├── preprocess_cmrxm22.py       # CMRxM22 preprocessing (IQA filter, label remap)
 │   │
-│   ├── evaluate_cmrxm22.py         # CMRxM22 zero-shot evaluation
+│   ├── evaluate_cmrxm22.py         # CMRxM22 evaluation
 │   ├── eval_acdc_test.py           # Independent ACDC17 verification
 │   ├── eval_mms_test.py            # Independent M&Ms20 verification
 │   │
 │   ├── run_test.py                 # Unified demo (all three datasets, sample data)
 │   ├── demo_figure.py              # Random qualitative figure (one patient per dataset)
-│   └── figure_a.py                 # Qualitative figure generator (used in the report)
 │
 ├── Data/
 │   ├── sample_data/                # Sample patients shipped with the repo for the demo

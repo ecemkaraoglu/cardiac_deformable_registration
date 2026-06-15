@@ -13,9 +13,6 @@ Contours overlaid:
     orange = LV endocardium (inner LV boundary)
     green  = LV epicardium  (outer myocardial boundary, LV + MYO union)
 
-The figure is shown in a matplotlib window. Re-run the script to see
-a different random patient from each dataset.
-
 Usage:
     python Code/demo_figure.py            # GPU if available, else CPU
     python Code/demo_figure.py --cpu      # force CPU mode
@@ -226,9 +223,8 @@ def warp_image(img, disp_field, grid, device):
 
 
 # -------------------- Random selection --------------------
-def pick_random_patient(dataset, exclude=None):
-    """Pick one random patient directory from sample_data/<dataset>/.
-    If `exclude` is given (set of paths), those patients are skipped."""
+def pick_random_patient(dataset):
+    """Pick one random patient directory from sample_data/<dataset>/."""
     dataset_dir = os.path.join(SAMPLE_DIR, dataset)
     if not os.path.isdir(dataset_dir):
         return None
@@ -236,103 +232,84 @@ def pick_random_patient(dataset, exclude=None):
         d for d in glob.glob(os.path.join(dataset_dir, '*'))
         if os.path.isdir(d)
     ])
-    if exclude:
-        candidates = [d for d in candidates if d not in exclude]
     if not candidates:
         return None
     return random.choice(candidates)
 
 
 # -------------------- Per-dataset processing --------------------
-def process_dataset(dataset, lv_label, myo_label, device, max_tries=5):
-    """Load random patient, run model, return display arrays + contours.
+def process_dataset(dataset, lv_label, myo_label, device):
+    """Load random patient, run model, return display arrays + contours."""
+    patient_dir = pick_random_patient(dataset)
+    if patient_dir is None:
+        return None
+    patient_id = os.path.basename(patient_dir)
 
-    Retries with a different random patient (up to max_tries) if the
-    chosen patient has no slice with LV pixels in both ED and ES.
-    """
-    tried = set()
-    for attempt in range(max_tries):
-        patient_dir = pick_random_patient(dataset, exclude=tried)
-        if patient_dir is None:
-            return None
-        patient_id = os.path.basename(patient_dir)
-        tried.add(patient_dir)
+    # Load
+    if dataset == 'acdc':
+        loaded = load_acdc_patient(patient_dir)
+        model_path = ACDC_MODEL
+    else:
+        loaded = load_preprocessed_patient(patient_dir, dataset)
+        model_path = MMS_MODEL
+    if loaded is None:
+        return None
+    ed_img, es_img, ed_gt, es_gt = loaded
 
-        # Load
-        if dataset == 'acdc':
-            loaded = load_acdc_patient(patient_dir)
-            model_path = ACDC_MODEL
-        else:
-            loaded = load_preprocessed_patient(patient_dir, dataset)
-            model_path = MMS_MODEL
-        if loaded is None:
-            continue
-        ed_img, es_img, ed_gt, es_gt = loaded
+    # Simple slice selection: slice with most LV in ED
+    lv_per_slice = np.array([(ed_gt[z] == lv_label).sum()
+                             for z in range(ed_gt.shape[0])])
+    if lv_per_slice.max() == 0:
+        print(f'    skipping {patient_id}: no LV in ED')
+        return None
+    z = int(np.argmax(lv_per_slice))
 
-        # Quick check: does any slice have LV pixels in BOTH ED and ES?
-        lv_ed = np.array([(ed_gt[z] == lv_label).sum()
-                          for z in range(ed_gt.shape[0])])
-        lv_es = np.array([(es_gt[z] == lv_label).sum()
-                          for z in range(es_gt.shape[0])])
-        score = np.minimum(lv_ed, lv_es)
-        if score.max() == 0:
-            print(f'    skipping {patient_id}: no slice with LV in both ED and ES')
-            continue
+    # Build and run model
+    model = build_model(model_path, device)
+    grid  = generate_grid_unit(IMGSHAPE)
+    grid  = torch.from_numpy(
+        np.reshape(grid, (1,) + grid.shape)).to(device).float()
 
-        # Good candidate, build and run model
-        model = build_model(model_path, device)
-        grid  = generate_grid_unit(IMGSHAPE)
-        grid  = torch.from_numpy(
-            np.reshape(grid, (1,) + grid.shape)).to(device).float()
+    fix = to_tensor(ed_img, device)
+    mov = to_tensor(es_img, device)
+    with torch.no_grad():
+        disp = model(mov, fix)[0]
 
-        fix = to_tensor(ed_img, device)
-        mov = to_tensor(es_img, device)
-        with torch.no_grad():
-            disp = model(mov, fix)[0]
+    warped_img = warp_image(es_img, disp, grid, device)
+    warped_seg = warp_segmentation(es_gt, disp, grid, device)
 
-        warped_img = warp_image(es_img, disp, grid, device)
-        warped_seg = warp_segmentation(es_gt, disp, grid, device)
+    del model
+    if device.type == 'cuda':
+        torch.cuda.empty_cache()
 
-        # Free GPU memory
-        del model
-        if device.type == 'cuda':
-            torch.cuda.empty_cache()
+    print(f'    {patient_id} slice z={z}')
 
-        z = int(np.argmax(score))
-        print(f'    slice z={z}  (LV pixels: ED={lv_ed[z]}, ES={lv_es[z]})')
+    # Raw contour masks — no filtering
+    moving_endo = (es_gt[z] == lv_label)
+    moving_epi  = (es_gt[z] == lv_label) | (es_gt[z] == myo_label)
+    fixed_endo  = (ed_gt[z] == lv_label)
+    fixed_epi   = (ed_gt[z] == lv_label) | (ed_gt[z] == myo_label)
+    warped_endo = (warped_seg[z] == lv_label)
+    warped_epi  = (warped_seg[z] == lv_label) | (warped_seg[z] == myo_label)
 
-        # Build contour masks for the selected slice (no post-processing)
-        moving_endo  = (es_gt[z] == lv_label)
-        moving_epi   = ((es_gt[z] == lv_label) | (es_gt[z] == myo_label))
-        fixed_endo   = (ed_gt[z] == lv_label)
-        fixed_epi    = ((ed_gt[z] == lv_label) | (ed_gt[z] == myo_label))
-        warped_endo  = (warped_seg[z] == lv_label)
-        warped_epi   = ((warped_seg[z] == lv_label) |
-                        (warped_seg[z] == myo_label))
+    diff = np.abs(warped_img[z] - ed_img[z])
 
-        diff = np.abs(warped_img[z] - ed_img[z])
-
-        return {
-            'patient_id': patient_id,
-            'moving_img': es_img[z],
-            'fixed_img':  ed_img[z],
-            'warped_img': warped_img[z],
-            'diff_map':   diff,
-            'moving_endo': moving_endo, 'moving_epi': moving_epi,
-            'fixed_endo':  fixed_endo,  'fixed_epi':  fixed_epi,
-            'warped_endo': warped_endo, 'warped_epi': warped_epi,
-        }
-
-    print(f'    no usable patient found in {dataset} after {max_tries} tries')
-    return None
+    return {
+        'patient_id': patient_id,
+        'moving_img': es_img[z],
+        'fixed_img':  ed_img[z],
+        'warped_img': warped_img[z],
+        'diff_map':   diff,
+        'moving_endo': moving_endo, 'moving_epi': moving_epi,
+        'fixed_endo':  fixed_endo,  'fixed_epi':  fixed_epi,
+        'warped_endo': warped_endo, 'warped_epi': warped_epi,
+    }
 
 
 # -------------------- Plotting --------------------
 def draw_panel(ax, image, endo_mask=None, epi_mask=None, cmap='gray',
                vmin=None, vmax=None):
     ax.imshow(image, cmap=cmap, vmin=vmin, vmax=vmax)
-    # Draw epi first (outer), then endo on top so the inner contour stays visible.
-    # Use levels=[0.5] for sharp binary boundaries.
     if epi_mask is not None and epi_mask.any():
         ax.contour(epi_mask.astype(float),  levels=[0.5],
                    colors=[EPI_COLOR],  linewidths=1.6)
@@ -417,13 +394,13 @@ def main():
     results = []
 
     print('\n  Picking random patient: ACDC ...')
-    r = process_dataset('acdc',    lv_label=3, myo_label=2, device=device)
+    r = process_dataset('acdc', lv_label=3, myo_label=2, device=device)
     if r:
         print(f'    selected: {r["patient_id"]}')
     results.append(r)
 
     print('\n  Picking random patient: M&Ms ...')
-    r = process_dataset('mms',     lv_label=1, myo_label=3, device=device)
+    r = process_dataset('mms', lv_label=1, myo_label=3, device=device)
     if r:
         print(f'    selected: {r["patient_id"]}')
     results.append(r)
