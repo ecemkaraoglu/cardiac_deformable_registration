@@ -1,4 +1,9 @@
-﻿# Medical image I/O and processing
+﻿# Install PyTorch separately first (its build depends on your CUDA version).
+# See the Getting started section of the README, e.g.:
+#   pip install torch==2.11.0+cu128 torchvision==0.26.0+cu128 --index-url https://download.pytorch.org/whl/cu128
+# Then install the packages below with:  pip install -r requirements.txt
+
+# Medical image I/O and processing
 nibabel==5.4.2
 SimpleITK==2.5.4
 
@@ -10,5 +15,6 @@ scipy==1.17.1
 pillow==12.1.1
 matplotlib
 
-# Optional - faster attention (only used by some original-repo modules; auto-disabled if not available)
-xformers==0.0.35
+# Note: xformers is not required. The original repo can use it for faster
+# attention, but it is auto-disabled when unavailable and is incompatible with
+# some newer GPUs (Blackwell, compute capability 12.0).

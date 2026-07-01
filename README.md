@@ -4,7 +4,7 @@ Deformable image registration estimates a dense spatial mapping between two imag
 
 DIR-MRVIT uses a **Laplacian pyramid** with **Convolutional Projection Transformer Blocks (CPTBs)** trained in a **coarse-to-fine** manner to register cardiac MR images between end-diastole and end-systole.
 
-The original paper evaluates DIR-MRVIT on ACDC17, M&Ms20, and CMRxM22, but the released code base only covers M&Ms20. This project adds the missing pieces: a stratified 5-fold cross-validation pipeline for ACDC17, a preprocessing and evaluation pipeline for CMRxM22, and a unified demo that runs the trained models on sample patients from all three datasets. The original model code (`GP_TF.py`, `TransBlock.py`, `Functions.py`) is used as published; everything else in `Code/` was written here.
+The original paper evaluates DIR-MRVIT on ACDC17, M&Ms20, and CMRxM22, but the released code base only covers M&Ms20. This project adds the missing pieces: a stratified 5-fold cross-validation pipeline for ACDC17, a preprocessing and evaluation pipeline for CMRxM22, and per-dataset results scripts that run the trained models on sample patients and report the metrics. The original model code (`GP_TF.py`, `TransBlock.py`, `Functions.py`) is used as published; everything else in `Code/` was written here.
 
 Reference paper: Lu et al., *Deformable image registration using multi-resolution vision Transformer for cardiac motion estimation*, Phys. Med. Biol. 71, 025004 (2026). [DOI](https://doi.org/10.1088/1361-6560/ae365a). Original repository: https://github.com/xslu-scuec/DIR-MRVIT.
 
@@ -26,14 +26,11 @@ cardiac_deformable_registration/
 │   ├── cross_validation_mms.py     # M&Ms20 5-fold cross-validation
 │   │
 │   ├── preprocess_mms.py           # M&Ms20 preprocessing
-│   ├── preprocess_cmrxm22.py       # CMRxM22 preprocessing (IQA filter, label remap)
+│   ├── preprocess_cmrxm22.py       # CMRxM22 preprocessing 
 │   │
-│   ├── evaluate_cmrxm22.py         # CMRxM22 evaluation
-│   ├── eval_acdc_test.py           # Independent ACDC17 verification
-│   ├── eval_mms_test.py            # Independent M&Ms20 verification
-│   │
-│   ├── run_test.py                 # Unified demo (all three datasets, sample data)
-│   ├── demo_figure.py              # Random qualitative figure (one patient per dataset)
+│   ├── acdc_results.py             # ACDC17 metrics + qualitative figure (sample data)
+│   ├── mms_results.py              # M&Ms20 metrics + qualitative figure (sample data)
+│   └── cmr_results.py              # CMRxM22 metrics + qualitative figure (sample data)
 │
 ├── Data/
 │   ├── sample_data/                # Sample patients shipped with the repo for the demo
@@ -48,6 +45,8 @@ cardiac_deformable_registration/
 ├── Results/
 │   └── cmrxm22/                    # Per-case CMRxM22 evaluation results
 │
+├── Figures/                        # Example qualitative figures (one per dataset)
+│
 ├── README.md
 ├── requirements.txt
 └── .gitignore
@@ -59,7 +58,7 @@ cardiac_deformable_registration/
 
 - GPU with CUDA support recommended (tested on NVIDIA RTX 5070 Ti, CUDA 12.8)
 - Minimum 8 GB VRAM for training
-- The demo scripts also run on CPU (use the `--cpu` flag)
+- The results scripts also run on CPU, only slower
 - Python 3.12
 
 For CUDA versions other than 12.8, see https://pytorch.org/get-started/locally/ for the matching `torch` install command, then continue with `pip install -r requirements.txt`.
@@ -70,7 +69,7 @@ For CUDA versions other than 12.8, see https://pytorch.org/get-started/locally/ 
 
 The repository ships with a small set of sample patients so that the trained models can be tried out **without downloading any of the full datasets**.
 
-The five commands below clone the repository, install PyTorch and the remaining dependencies, and run the unified demo on all three datasets. They can be copied and pasted into a terminal as a single block.
+The commands below clone the repository, install PyTorch and the remaining dependencies, and run the three results scripts. They can be copied and pasted into a terminal as a single block.
 
 **GPU (CUDA 12.8)**
 
@@ -79,7 +78,9 @@ git clone https://github.com/ecemkaraoglu/cardiac_deformable_registration.git
 cd cardiac_deformable_registration
 pip install torch==2.11.0+cu128 torchvision==0.26.0+cu128 --index-url https://download.pytorch.org/whl/cu128
 pip install -r requirements.txt
-python Code/run_test.py
+python Code/acdc_results.py
+python Code/mms_results.py
+python Code/cmr_results.py
 ```
 
 **CPU only**
@@ -89,34 +90,32 @@ git clone https://github.com/ecemkaraoglu/cardiac_deformable_registration.git
 cd cardiac_deformable_registration
 pip install torch==2.11.0 torchvision==0.26.0
 pip install -r requirements.txt
-python Code/run_test.py --cpu
+python Code/acdc_results.py
+python Code/mms_results.py
+python Code/cmr_results.py
 ```
 
-The `run_test.py` script runs the trained models on the sample patients (10 ACDC + 10 M&Ms + 18 CMRxM22) and prints per-patient and pooled metrics for each dataset, with the corresponding paper values printed alongside for comparison.
+Each results script runs the trained models on its sample patients and prints a per-patient table followed by a sample / full / paper comparison. It then opens a matplotlib window with one random patient: the ES, predicted ED, and ED images on top, and the matching contours (LV endocardium and epicardium) below.
 
-### Running a single dataset
+### Useful options
+
+Each script takes the same options:
 
 ```bash
-python Code/run_test.py --dataset acdc      # ACDC only
-python Code/run_test.py --dataset mms       # M&Ms only
-python Code/run_test.py --dataset cmrxm22   # CMRxM22 only
+python Code/acdc_results.py --patient patient003 --slice 6   # pick a specific patient and slice
+python Code/mms_results.py  --subject A1D9Z7                  # M&Ms uses --subject
+python Code/cmr_results.py  --case P002-1                     # CMRxM22 uses --case
+python Code/acdc_results.py --no-show                         # print metrics only, no figure
+python Code/acdc_results.py --save Figures/acdc_example.png   # save the figure instead of showing it
 ```
 
-### Qualitative demo
-
-```bash
-python Code/demo_figure.py
-```
-
-Picks one random patient from each dataset and opens a matplotlib window showing four panels per patient: the moving frame (ES), the fixed frame (ED), the warped frame predicted by the model, and a difference map. Overlaid contours show the LV endocardium (orange) and LV epicardium (green). Re-running picks different random patients.
-
-Both demo scripts use a single trained fold (fold 0) for each dataset. The pooled results in the *Results* section below are averaged across all five folds.
+For CMRxM22 the model is the M&Ms-trained one. By default all five fold models are applied and averaged; `--fold 0` uses a single fold instead.
 
 ---
 
 ## Datasets
 
-Only required to reproduce the full training and evaluation. The demo runs from the included sample data and needs no external download.
+Only required to reproduce the full training and evaluation. The sample data is included, so the results scripts need no external download.
 
 ### ACDC17
 
@@ -138,7 +137,7 @@ Only required to reproduce the full training and evaluation. The demo runs from 
 
 ## Preprocessing
 
-ACDC17 preprocessing (resample to 1.25 x 1.25 x 5.0 mm, crop to 96 x 96 x 16, intensity normalization) is performed inline by each ACDC script (`cross_validation_acdc.py`, `eval_acdc_test.py`, `run_test.py`, and `demo_figure.py`). No separate `preprocess_acdc.py` step is needed.
+ACDC17 preprocessing (resample to 1.25 x 1.25 x 5.0 mm, crop to 96 x 96 x 16, intensity normalization) is performed inline by the ACDC scripts (`cross_validation_acdc.py` and `acdc_results.py`). No separate `preprocess_acdc.py` step is needed.
 
 M&Ms20 and CMRxM22 use disk-based preprocessing because of their heavier transformations (4D timeseries extraction, IQA filtering, label remapping). All three datasets apply the same operations conceptually (resample, crop, normalize); only the location of the code differs.
 
@@ -182,52 +181,53 @@ python Code/cross_validation_mms.py
 
 ---
 
-## Evaluation on the full datasets
-
-These scripts reproduce the numbers in the *Results* section below.
-
-```bash
-python Code/eval_acdc_test.py        # ACDC17, 5-fold pooled
-python Code/eval_mms_test.py         # M&Ms20, 5-fold pooled
-python Code/evaluate_cmrxm22.py --data_dir Data/CMRxM22_preprocessed --model_dir Models_mms_full --all_folds --out_dir Results/cmrxm22
-```
-
-The `--all_folds` flag averages metrics across all five M&Ms-trained fold models for a more stable estimate than a single randomly chosen fold (which is what the paper reports).
-
----
-
 ## Results
 
-Three evaluation regimes are reported below. The **sample** column shows the metrics produced by `run_test.py` on the small sample subsets shipped with this repository (10 ACDC, 10 M&Ms, 18 CMRxM22), using fold 0 of the trained checkpoints. The **full** column shows the full-dataset results reproduced in this project: 5-fold stratified cross-validation on the 100 ACDC17 patients, 5-fold cross-validation on the 150 M&Ms20 patients (with smoothness weight λ=0.2), and zero-shot transfer to all 69 CMRxM22 cases averaged across the five M&Ms-trained fold models. The **paper** column shows the values reported in Tables 2–4 of the original DIR-MRVIT paper.
+Each results script prints three columns. The **sample** column is the metric on the small sample subset shipped with this repository (10 ACDC, 10 M&Ms, 18 CMRxM22); ACDC and M&Ms evaluate each patient with the fold model whose test set it belongs to, and CMRxM22 averages all five M&Ms-trained folds. The **full** column is the full-dataset result reproduced in this project: 5-fold stratified cross-validation on the 100 ACDC17 patients, 5-fold cross-validation on the 150 M&Ms20 patients (with smoothness weight lambda=0.2), and zero-shot transfer to the CMRxM22 cases averaged across the five M&Ms-trained fold models. The **paper** column is from Tables 2-4 of the original paper. HD is reported as HD95.
 
 ### ACDC17
 
-| Metric          | Sample (10)         | Full (100, 5-fold)   | Paper (100, 5-fold) |
-|-----------------|---------------------|----------------------|---------------------|
-| LV Dice         | 0.870 ± 0.080       | 0.887 ± 0.069        | 0.917 ± 0.043       |
-| MYO Dice        | 0.754 ± 0.063       | 0.752 ± 0.065        | 0.789 ± 0.055       |
-| Endo HD95 (mm)  | 5.59  ± 2.44        | 5.27  ± 2.43         | 5.62  ± 1.22        |
-| Epi HD95 (mm)   | 6.63  ± 2.32        | 4.40  ± 2.01         | 5.51  ± 1.77        |
+| Metric          | Sample (10)      | Full (100)       | Paper            |
+|-----------------|------------------|------------------|------------------|
+| LV Dice         | 0.865 ± 0.084    | 0.887 ± 0.069    | 0.917 ± 0.043    |
+| MYO Dice        | 0.756 ± 0.062    | 0.752 ± 0.065    | 0.789 ± 0.055    |
+| Endo ASSD (mm)  | 2.018 ± 1.234    | 1.509 ± 1.033    | 0.790 ± 0.390    |
+| Epi ASSD (mm)   | 1.578 ± 0.668    | 1.082 ± 0.512    | 0.880 ± 0.210    |
+| Endo HD (mm)    | 6.191 ± 2.995    | 5.270 ± 2.428    | 5.620 ± 1.220    |
+| Epi HD (mm)     | 5.699 ± 2.442    | 4.399 ± 2.012    | 5.510 ± 1.770    |
+| Jacobian (%)    | 0.142 ± 0.171    | 0.129 ± 0.163    | 0.409 ± 0.153    |
+
+![ACDC example](Figures/acdc_example.png)
 
 ### M&Ms20
 
-| Metric          | Sample (10)         | Full (150, 5-fold)   | Paper (150, 5-fold) |
-|-----------------|---------------------|----------------------|---------------------|
-| LV Dice         | 0.893 ± 0.030       | 0.877 ± 0.050        | 0.884 ± 0.038       |
-| MYO Dice        | 0.794 ± 0.047       | 0.790 ± 0.070        | 0.729 ± 0.057       |
-| Endo HD95 (mm)  | 6.58  ± 1.84        | 7.15                 | 7.40  ± 2.78        |
-| Epi HD95 (mm)   | 8.20  ± 0.82        | 8.74                 | 8.16  ± 1.95        |
+| Metric          | Sample (10)      | Full (150)       | Paper            |
+|-----------------|------------------|------------------|------------------|
+| LV Dice         | 0.891 ± 0.026    | 0.877 ± 0.050    | 0.884 ± 0.038    |
+| MYO Dice        | 0.780 ± 0.054    | 0.790 ± 0.070    | 0.729 ± 0.057    |
+| Endo ASSD (mm)  | 1.287 ± 0.302    | 1.620 ± 0.923    | 1.880 ± 0.790    |
+| Epi ASSD (mm)   | 1.933 ± 0.488    | 2.081 ± 0.736    | 2.050 ± 0.830    |
+| Endo HD (mm)    | 6.859 ± 1.412    | 7.153 ± 2.769    | 7.400 ± 2.780    |
+| Epi HD (mm)     | 8.132 ± 0.837    | 8.744 ± 2.277    | 8.160 ± 1.950    |
+| Jacobian (%)    | 0.243 ± 0.145    | 0.275 ± 0.195    | 0.536 ± 0.321    |
+
+![M&Ms example](Figures/mms_example.png)
 
 ### CMRxM22 (zero-shot)
 
-| Metric          | Sample (18)         | Full (69, all folds) | Paper (69)          |
-|-----------------|---------------------|----------------------|---------------------|
-| LV Dice         | 0.857 ± 0.040       | 0.857 ± 0.051        | 0.892 ± 0.027       |
-| MYO Dice        | 0.675 ± 0.051       | 0.758 ± 0.077        | 0.703 ± 0.050       |
-| Endo HD95 (mm)  | 7.74  ± 2.10        | 7.51                 | 7.82  ± 2.31        |
-| Epi HD95 (mm)   | 7.85  ± 0.90        | 8.22                 | 8.07  ± 2.24        |
+| Metric          | Sample (18)      | Full             | Paper            |
+|-----------------|------------------|------------------|------------------|
+| LV Dice         | 0.871 ± 0.035    | 0.854 ± 0.067    | 0.892 ± 0.027    |
+| MYO Dice        | 0.825 ± 0.031    | 0.756 ± 0.085    | 0.703 ± 0.050    |
+| Endo ASSD (mm)  | 1.860 ± 0.719    | 1.944 ± 0.863    | 1.780 ± 0.600    |
+| Epi ASSD (mm)   | 2.121 ± 0.604    | 2.629 ± 0.824    | 1.940 ± 0.690    |
+| Endo HD (mm)    | 7.187 ± 1.984    | 7.498 ± 2.123    | 7.820 ± 2.310    |
+| Epi HD (mm)     | 7.792 ± 1.064    | 9.393 ± 2.649    | 8.070 ± 2.240    |
+| Jacobian (%)    | 0.903 ± 0.438    | 1.046 ± 0.505    | 0.303 ± 0.141    |
 
-Additional metrics (ASSD, Jacobian folding percentage), per-fold breakdowns, and the ablation comparing smoothness weights (λ=0.5 vs λ=0.2 on M&Ms20) are reported in the project report.
+![CMRxM22 example](Figures/cmr_example.png)
+
+The ablation comparing smoothness weights (lambda=0.5 vs lambda=0.2 on M&Ms20) and per-fold breakdowns are reported in the project report.
 
 ---
 

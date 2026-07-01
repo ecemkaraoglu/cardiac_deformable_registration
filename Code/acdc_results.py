@@ -311,7 +311,7 @@ def draw_contours(ax, base_img, seg, title):
     ax.axis("off")
 
 
-def show_patient(patient, arrays, metrics, slice_idx):
+def show_patient(patient, arrays, metrics, slice_idx, save_path=None):
     es_img = np.transpose(arrays["es_img"], (1, 2, 0))
     ed_img = np.transpose(arrays["ed_img"], (1, 2, 0))
     es_gt = np.transpose(arrays["es_gt"], (1, 2, 0))
@@ -344,7 +344,11 @@ def show_patient(patient, arrays, metrics, slice_idx):
     fig.suptitle(f"{patient}", fontsize=12)
     fig.tight_layout(rect=[0, 0.05, 1, 0.96])
     fig.subplots_adjust(hspace=0.18)
-    plt.show()
+    if save_path:
+        fig.savefig(save_path, dpi=150, bbox_inches="tight")
+        print(f"Saved figure to {save_path}")
+    else:
+        plt.show()
 
 
 # ---------------- main ----------------
@@ -354,6 +358,7 @@ def main():
     parser.add_argument("--slice", type=int, default=None, help="Slice index to plot.")
     parser.add_argument("--seed", type=int, default=None, help="Random seed for patient choice.")
     parser.add_argument("--no-show", action="store_true", help="Compute metrics only, no figure.")
+    parser.add_argument("--save", default=None, help="Save the figure to this path instead of showing it.")
     args = parser.parse_args()
 
     if args.seed is not None:
@@ -453,7 +458,7 @@ def main():
 
     print(f"Plotting patient: {plot_patient}")
     arrays, metrics = plot_cache[plot_patient]
-    show_patient(plot_patient, arrays, metrics, args.slice)
+    show_patient(plot_patient, arrays, metrics, args.slice, args.save)
 
 
 if __name__ == "__main__":
