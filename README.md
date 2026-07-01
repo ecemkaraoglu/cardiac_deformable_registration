@@ -26,11 +26,13 @@ cardiac_deformable_registration/
 │   ├── cross_validation_mms.py     # M&Ms20 5-fold cross-validation
 │   │
 │   ├── preprocess_mms.py           # M&Ms20 preprocessing
-│   ├── preprocess_cmrxm22.py       # CMRxM22 preprocessing 
+│   ├── preprocess_cmrxm22.py       # CMRxM22 preprocessing (IQA filter, label remap)
 │   │
 │   ├── acdc_results.py             # ACDC17 metrics + qualitative figure (sample data)
 │   ├── mms_results.py              # M&Ms20 metrics + qualitative figure (sample data)
-│   └── cmr_results.py              # CMRxM22 metrics + qualitative figure (sample data)
+│   ├── cmr_results.py              # CMRxM22 metrics + qualitative figure (sample data)
+│   ├── external_results.py         # run a trained model on external JPEG/PNG images
+│   └── make_test_pngs.py          # export a sample case to PNGs (demo sanity check)
 │
 ├── Data/
 │   ├── sample_data/                # Sample patients shipped with the repo for the demo
@@ -183,7 +185,7 @@ python Code/cross_validation_mms.py
 
 ## Results
 
-Each results script prints three columns. The **sample** column is the metric on the small sample subset shipped with this repository (10 ACDC, 10 M&Ms, 18 CMRxM22); ACDC and M&Ms evaluate each patient with the fold model whose test set it belongs to, and CMRxM22 averages all five M&Ms-trained folds. The **full** column is the full-dataset result reproduced in this project: 5-fold stratified cross-validation on the 100 ACDC17 patients, 5-fold cross-validation on the 150 M&Ms20 patients (with smoothness weight lambda=0.2), and zero-shot transfer to the CMRxM22 cases averaged across the five M&Ms-trained fold models. The **paper** column is from Tables 2-4 of the original paper. HD is reported as HD95.
+Each results script prints three columns. The **sample** column is the metric on the small sample subset shipped with this repository (10 ACDC, 10 M&Ms, 18 CMRxM22); ACDC and M&Ms evaluate each patient with the fold model whose test set it belongs to, and CMRxM22 averages all five M&Ms-trained folds. The **full** column is the full-dataset result reproduced in this project: 5-fold stratified cross-validation on the 100 ACDC17 patients, 5-fold cross-validation on the 150 M&Ms20 patients (with smoothness weight lambda=0.2), and transfer to the CMRxM22 cases averaged across the five M&Ms-trained fold models. The **paper** column is from Tables 2-4 of the original paper. HD is reported as HD95.
 
 ### ACDC17
 
@@ -213,7 +215,7 @@ Each results script prints three columns. The **sample** column is the metric on
 
 ![M&Ms example](Figures/mms_example.png)
 
-### CMRxM22 (zero-shot)
+### CMRxM22
 
 | Metric          | Sample (18)      | Full             | Paper            |
 |-----------------|------------------|------------------|------------------|
@@ -228,6 +230,86 @@ Each results script prints three columns. The **sample** column is the metric on
 ![CMRxM22 example](Figures/cmr_example.png)
 
 The ablation comparing smoothness weights (lambda=0.5 vs lambda=0.2 on M&Ms20) and per-fold breakdowns are reported in the project report.
+
+---
+
+## Demo: running the model on external images
+
+`Code/external_results.py` runs a trained model on an external case supplied as
+2D JPEG (or PNG) images, converts them to the project's format, and reports the
+registration metrics and a figure in one command. This is meant for trying the
+trained model on new data without touching the datasets in the repository.
+
+### Input
+
+Put the case images in one folder. File names are matched case-insensitively
+(spellings like `ED-gt`, `ED_label` are also accepted):
+
+```
+my_case/
+  ED.jpg        end-diastole image        (required)
+  ES.jpg        end-systole image         (required)
+  ES_gt.jpg     end-systole segmentation  (required)
+  ED_gt.jpg     end-diastole segmentation (optional)
+```
+
+`ES_gt` is required because it is the segmentation the model warps with the
+estimated field to produce the predicted ED segmentation. `ED_gt` is optional:
+it is only the comparison target for the metrics. If it is missing, the model
+still runs and the figure is drawn, but the metrics cannot be computed.
+
+### Running it
+
+Choose which trained model and label convention to apply with `--dataset`:
+
+```bash
+python Code/external_results.py --in_dir my_case --dataset mms
+python Code/external_results.py --in_dir my_case --dataset acdc
+python Code/external_results.py --in_dir my_case --dataset cmr --fold all
+```
+
+Options: `--fold N` (0-4, or `all` to average the five folds), `--slice N` to
+pick the drawn slice, `--save out.png` to save the figure, `--no-show` for
+metrics only.
+
+A note on segmentation images: JPEG is lossy and blurs label edges. The
+cleanest way to store a JPEG segmentation is with each label as a gray value of
+`label * 60` (0, 60, 120, 180); the script recovers the original label numbers
+from these bands. Clean 0/1/2/3 label images (e.g. PNG) are also read directly.
+
+### Sanity check on our own data
+
+`Code/make_test_pngs.py` is a small helper used to verify the demo pipeline
+end to end. It exports one slice of a sample case (already in the repository) to
+the four PNG files, which can then be fed to `external_results.py`. This lets
+the whole convert-and-evaluate path be checked on data whose result is already
+known:
+
+```bash
+python Code/make_test_pngs.py --case_dir Data/sample_data/mms/A0S9V9 --out_dir test_mms
+python Code/external_results.py --in_dir test_mms --dataset mms
+```
+
+The same works for the other datasets (`Data/sample_data/acdc/patient001` with
+`--dataset acdc`, `Data/sample_data/cmrxm22/P001-1` with `--dataset cmr`).
+
+### Included external examples
+
+Two external cases are included under `Data/sample_data/external_p5` and
+`Data/sample_data/external_p8`:
+
+```bash
+python Code/external_results.py --in_dir Data/sample_data/external_p5 --dataset mms
+python Code/external_results.py --in_dir Data/sample_data/external_p8 --dataset mms
+```
+
+These cases have ED, ES, and an ES segmentation, but no ED segmentation, so the
+metrics cannot be computed; the model still runs and the qualitative figure is
+produced. They are also echocardiography (ultrasound) 4-chamber views, whereas
+the model was trained on short-axis cardiac MR, so the registration is only
+approximate. Even so, the estimated field follows the visible motion and the
+warped image moves toward the ED shape, which shows the model still picks up a
+consistent pattern on out-of-domain data.
 
 ---
 

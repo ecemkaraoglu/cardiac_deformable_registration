@@ -258,10 +258,13 @@ def draw_contours(ax, base_img, seg, title):
     ax.imshow(base_img, cmap="gray")
     lv_mask = (seg == LV_LABEL).astype(float)
     epi_mask = ((seg == LV_LABEL) | (seg == MYO_LABEL)).astype(float)
-    if lv_mask.sum() > 0:
-        ax.contour(lv_mask, levels=[0.5], colors=[ENDO_COLOR], linewidths=1.5)
+    # Draw epicardium (green) first, then endocardium (orange) on top, so the
+    # orange contour stays visible even where the myocardium is thin and the
+    # two contours nearly overlap.
     if epi_mask.sum() > 0:
         ax.contour(epi_mask, levels=[0.5], colors=[EPI_COLOR], linewidths=1.5)
+    if lv_mask.sum() > 0:
+        ax.contour(lv_mask, levels=[0.5], colors=[ENDO_COLOR], linewidths=1.8)
     ax.set_title(title, fontsize=12)
     ax.axis("off")
 
